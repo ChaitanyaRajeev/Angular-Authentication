@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router()
 const mongoose = require('mongoose');
-const User = require('../models/user')
+const User = require('../models/user');
+const jwt = require('jsonwebtoken');
+
 var db = mongoose.connect('mongodb://localhost:27017/codeauth',  { useNewUrlParser: true }, function(err, response){  
     if(err){ console.log( err); }  
     else{ console.log('Connected to ' + db, ' + ', response); }  
@@ -19,7 +21,9 @@ router.post('/register',(req,res)=>{
             console.log(err);
         }
         else{
-            res.status(200).send(data);
+            let payload = {subject:data._id}
+            let token = jwt.sign(payload,'secretKey');
+            res.status(200).send({token});
         }
     })
 })
@@ -41,7 +45,9 @@ router.post('/login',(req,res)=>{
                     res.status(401).send('Invalid password')
                 }
                 else{
-                    res.status(200).send(user);
+                    let payload = {subject:user._id}
+                    let token = jwt.sign(payload,'secretKey');
+                    res.status(200).send({token});
                 }
             }
         }
@@ -49,10 +55,25 @@ router.post('/login',(req,res)=>{
 
 })
 
+function verifyToken(req, res, next) {
+    if(!req.headers.authorization) {
+      return res.status(401).send('Unauthorized request')
+    }
+    let token = req.headers.authorization.split(' ')[1]
+    if(token === 'null') {
+      return res.status(401).send('Unauthorized request')    
+    }
+    let payload = jwt.verify(token, 'secretKey')
+    if(!payload) {
+      return res.status(401).send('Unauthorized request')    
+    }
+    req.userId = payload.subject;
+    next();
+  }
 
 
-router.get('/special',(req,res)=>{
-    let events = [
+router.get('/special', verifyToken,(req,res)=>{
+    let specialEvents  = [
         {
             "_id":"1",
             "name":"Auto Expo",
@@ -74,7 +95,7 @@ router.get('/special',(req,res)=>{
         
 
     ]
-    res.json(events);
+    res.json(specialEvents);
 })
 
 
