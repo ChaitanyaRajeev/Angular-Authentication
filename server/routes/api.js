@@ -3,6 +3,7 @@ const router = express.Router()
 const mongoose = require('mongoose');
 const User = require('../models/user');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
 var db = mongoose.connect('mongodb://localhost:27017/codeauth',  { useNewUrlParser: true }, function(err, response){  
     if(err){ console.log( err); }  
@@ -13,10 +14,18 @@ router.get('/',(req,res)=>{
     res.send('From API Route')
 })
 
-router.post('/register',(req,res)=>{
-    let userDate = req.body
-    let user = new User(userDate)
-    user.save((err,data)=>{
+router.post('/register',async (req,res)=>{
+
+    //Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashPassword = await bcrypt.hash(req.body.password,salt);
+
+    const userData = new User({
+        email:req.body.email,
+        password:hashPassword
+    });
+   
+    const savedUser = await userData.save((err,data)=>{
         if(err){
             console.log(err);
         }
@@ -29,29 +38,21 @@ router.post('/register',(req,res)=>{
 })
 
 
-router.post('/login',(req,res)=>{
+router.post('/login',async (req,res)=>{
     let userDate = req.body 
+    console.log('________________________________________________________')
+    const check = await User.findOne({email:userDate.email});
+      
+    if(!check){
+        return res.status(400).send('Email doesnt exists');
+    }
 
-    User.findOne({email:userDate.email},(error,user)=>{
-        if(error){
-            console.log(error);
-        }
-        else{
-            if(!user){
-                res.status(401).send('Invalid email');
-            }
-            else{
-                if(user.password !==userDate.password){
-                    res.status(401).send('Invalid password')
-                }
-                else{
-                    let payload = {subject:user._id}
-                    let token = jwt.sign(payload,'secretKey');
-                    res.status(200).send({token});
-                }
-            }
-        }
-    })
+    const validPass = await bcrypt.compare(userDate.password,check.password);
+    if(!validPass) return res.status(400).send('Invalid Password');
+
+    let payload = {subject:check._id}
+    let token = jwt.sign(payload,'secretKey');
+    res.status(200).send({token});
 
 })
 
